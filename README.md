@@ -31,7 +31,8 @@ Add the `esque.ma.markdown-editor` package to your local project packages, and i
 ```
     MarkleftEditor.MarkleftRenderer.Draw(<markleftString>,<currentAssetPath>);
 ```
-where `markleftString` is the markleft code you want to draw, and `currentAssetPath` is the `AssetDatabase` path of the asset to reference any relative links from.
+where `markleftString` is the markleft code you want to draw, and `currentAssetPath` is the `AssetDatabase` path of the asset to reference any relative links from. 
+See `Assets/TutorialInfo/Scripts/Readme.cs` and `Assets/TutorialInfo/Scripts/Editor/ReadmeEditor.cs` for a usage sample.
 
 
 -----
