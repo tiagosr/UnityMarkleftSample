@@ -15,6 +15,7 @@ Markleft is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-li
   - To menu entries: `[To Package Manager](menu:Window/Package Management/Package Manager)`
   - To project settings: `[To Quality Settings](project:Project/Quality)`
   - To user preferences: `[To External Tools](prefs:Preferences/External Tools)`
+  - That trigger scripts: `[That trigger scripts](static:ReadmeEditor.ExampleCall)`
 * Images
   * `![as internal references](TutorialInfo/Icons/URP.png)`
 * Code blocks (no syntax highlighting yet)
@@ -29,9 +30,9 @@ Markleft is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-li
 
 Add the `esque.ma.markdown-editor` package to your local project packages, and in your `OnInspectorGUI()` or similar call use:
 ```
-    MarkleftEditor.MarkleftRenderer.Draw(<markleftString>,<currentAssetPath>);
+    MarkleftEditor.MarkleftRenderer.Draw(<markleftString>, <currentAssetPath>, <objectForContext>);
 ```
-where `markleftString` is the markleft code you want to draw, and `currentAssetPath` is the `AssetDatabase` path of the asset to reference any relative links from. 
+where `markleftString` is the markleft code you want to draw, `currentAssetPath` is the `AssetDatabase` path of the asset to reference any relative links from, and `objectForContext` is any object that is part of the root assembly to look for static methods. 
 See `Assets/TutorialInfo/Scripts/Readme.cs` and `Assets/TutorialInfo/Scripts/Editor/ReadmeEditor.cs` for a usage sample.
 
 

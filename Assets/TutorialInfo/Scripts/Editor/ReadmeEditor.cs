@@ -52,6 +52,11 @@ public class ReadmeEditor : Editor
         }
     }
 
+    static void ExampleCall()
+    {
+        EditorUtility.DisplayDialog("Hello Markleft!", "I was just called from a Markleft document!", "OK");
+    }
+
     static void SelectReadmeAutomatically()
     {
         if (!SessionState.GetBool(s_ShowedReadmeSessionStateName, false))
@@ -127,12 +132,7 @@ public class ReadmeEditor : Editor
         var readme = (Readme)target;
         Init();
 
-        MarkleftRenderer.Draw(readme.sourceFile.text, AssetDatabase.GetAssetPath(readme.sourceFile));
-
-        if (GUILayout.Button("Remove Readme Assets", ButtonStyle))
-        {
-            RemoveTutorial();
-        }
+        MarkleftRenderer.Draw(readme.sourceFile.text, AssetDatabase.GetAssetPath(readme.sourceFile), this);
 
         serializedObject.ApplyModifiedProperties();
     }

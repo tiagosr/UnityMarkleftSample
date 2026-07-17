@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEditor;
@@ -267,9 +268,11 @@ namespace MarkleftEditor
             url.StartsWith("project:", StringComparison.Ordinal);
         private static bool IsPrefsCall(string url) =>
             url.StartsWith("prefs:", StringComparison.Ordinal);
+        private static bool IsStaticMethodCall(string url) =>
+            url.StartsWith("static:", StringComparison.Ordinal);
         
         private static bool IsInternalCall(string url) => 
-            IsMenuCall(url) || IsProjectCall(url) || IsPrefsCall(url);
+            IsMenuCall(url) || IsProjectCall(url) || IsPrefsCall(url) || IsStaticMethodCall(url);
         
         private static bool IsRemoteURL(string url) =>
             url.StartsWith("http://", StringComparison.Ordinal) 
@@ -278,7 +281,7 @@ namespace MarkleftEditor
 
         private static bool IsNonAsset(string url) => IsRemoteURL(url) || IsInternalCall(url);
 
-        private static void OpenLink(string url)
+        private static void OpenLink(string url, UnityEngine.Object scriptExecContext)
         {
             if (string.IsNullOrEmpty(url)) return;
             if (IsRemoteURL(url))
@@ -300,6 +303,51 @@ namespace MarkleftEditor
             if (IsPrefsCall(url))
             {
                 SettingsService.OpenUserPreferences(url[6..]);
+                return;
+            }
+
+            if (IsStaticMethodCall(url))
+            {
+                var wholeName = url[7..];
+                
+                List<Assembly> assemblies = new List<Assembly>();
+                if (scriptExecContext is not null)
+                {
+                    assemblies.Add(scriptExecContext.GetType().Assembly);
+                } 
+                else
+                {
+                    assemblies.Add(typeof(EditorUtility).Assembly);
+                    assemblies.Add(typeof(UnityEngine.Object).Assembly);
+                    assemblies.Add(typeof(MarkleftRenderer).Assembly);
+                }
+                var splitLocation = wholeName.LastIndexOf('.');
+                if (splitLocation == -1)
+                {
+                    Debug.LogError($"[MarkleftRenderer] Could not resolve method call: {wholeName}");
+                    return;
+                }
+                var className = wholeName[..splitLocation];
+                var methodName = wholeName[(splitLocation + 1)..];
+                Type t = null;
+                foreach (var assembly in assemblies)
+                {
+                    t = assembly.GetType(className);
+                    if (t is not null) break;
+                }
+                if (t is null)
+                {
+                    Debug.LogError($"[MarkleftRenderer] Could not resolve type: {className}");
+                    return;
+                }
+                var m = t.GetMethod(methodName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (m is null)
+                {
+                    Debug.LogError($"[MarkleftRenderer] Could not resolve method: {className}.{methodName}");
+                    return;
+                }
+
+                m.Invoke(null, new object[] { });
                 return;
             }
             
@@ -446,7 +494,8 @@ namespace MarkleftEditor
         /// <param name="indent">indentation to apply to this section</param>
         /// <param name="assetPath">path of the current asset to resolve relative paths against</param>
         /// <param name="bulletGlyph">glyph to prepend if in a bullet list</param>
-        private static void DrawWrappedInline(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath,
+        /// <param name="scriptExecContext">static script execution context: usually any C# object instance in the Editor space</param>
+        private static void DrawWrappedInline(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object scriptExecContext,
             string bulletGlyph = null)
         {
             var tokens = Tokenize(content, MakeStyleVariants(baseStyle), MakeStyleVariants(linkStyle), MakeStyleVariants(codeStyle), TokenType.Body, assetPath);
@@ -517,7 +566,7 @@ namespace MarkleftEditor
                         var gc = new GUIContent(token.Text);
                         if (GUILayout.Button(gc, token.Style, GUILayout.ExpandWidth(false)))
                         {
-                            OpenLink(token.LinkUrl);
+                            OpenLink(token.LinkUrl, scriptExecContext);
                         }
 
                         EditorGUIUtility.AddCursorRect(GUILayoutUtility.GetLastRect(), MouseCursor.Link);
@@ -529,7 +578,7 @@ namespace MarkleftEditor
                             var gc = new GUIContent(textureIfLoaded, token.Text);
                             if (GUILayout.Button(gc, GUILayout.Width(size.x), GUILayout.Height(size.y), GUILayout.ExpandWidth(false)))
                             {
-                                OpenLink(token.LinkUrl);
+                                OpenLink(token.LinkUrl, scriptExecContext);
                             }
                             EditorGUIUtility.AddCursorRect(GUILayoutUtility.GetLastRect(), MouseCursor.Link);
                         }
@@ -657,16 +706,23 @@ namespace MarkleftEditor
             }
         }
 
-        private static void DrawDashListItem(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath) => 
-            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, "-");
+        private static void DrawDashListItem(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object context) => 
+            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, context, "-");
 
-        private static void DrawBulletListItem(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath) => 
-            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, "\u2022");
+        private static void DrawBulletListItem(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object context) => 
+            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, context, "\u2022");
 
-        private static void DrawParagraph(string content, GUIStyle style, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath) => 
-            DrawWrappedInline(content, style, linkStyle, codeStyle, indent, assetPath);
+        private static void DrawParagraph(string content, GUIStyle style, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object context) => 
+            DrawWrappedInline(content, style, linkStyle, codeStyle, indent, assetPath, context);
 
-        public static void Draw(string markdown, string assetPath)
+        /// <summary>
+        /// Draws the Markleft string, using <paramref name="assetPath"/> as the base address for asset references, and
+        /// <paramref name="scriptExecContext"/> for the assembly to query for static methods
+        /// </summary>
+        /// <param name="markdown">Markleft file string</param>
+        /// <param name="assetPath">base address for relative asset references</param>
+        /// <param name="scriptExecContext">object instance to query the assembly for static script methods</param>
+        public static void Draw(string markdown, string assetPath, UnityEngine.Object scriptExecContext = null)
         {
             InitStyles();
             
@@ -702,22 +758,22 @@ namespace MarkleftEditor
 
                 if (line.StartsWith("#### ", StringComparison.Ordinal))
                 {
-                    DrawParagraph(line[5..], _h4, _h4L, _h4C, 0f, assetPath);
+                    DrawParagraph(line[5..], _h4, _h4L, _h4C, 0f, assetPath, scriptExecContext);
                     continue;
                 }
                 if (line.StartsWith("### ", StringComparison.Ordinal))
                 {
-                    DrawParagraph(line[4..], _h3, _h3L, _h3C, 0f, assetPath);
+                    DrawParagraph(line[4..], _h3, _h3L, _h3C, 0f, assetPath, scriptExecContext);
                     continue;
                 }
                 if (line.StartsWith("## ", StringComparison.Ordinal))
                 {
-                    DrawParagraph(line[3..], _h2, _h2L, _h2C, 0f, assetPath);
+                    DrawParagraph(line[3..], _h2, _h2L, _h2C, 0f, assetPath, scriptExecContext);
                     continue;
                 }
                 if (line.StartsWith("# ", StringComparison.Ordinal))
                 {
-                    DrawParagraph(line[2..], _h1, _h1L, _h1C, 0f, assetPath);
+                    DrawParagraph(line[2..], _h1, _h1L, _h1C, 0f, assetPath, scriptExecContext);
                     continue;
                 }
 
@@ -725,12 +781,12 @@ namespace MarkleftEditor
                 float indent = (line.Length == trimmedStart.Length) ? 0f : BulletIndent * (line.Length - trimmedStart.Length + 2) * 0.5f;
                 if (trimmedStart.StartsWith("- ", StringComparison.Ordinal))
                 {
-                    DrawDashListItem(trimmedStart[2..], _body, _linkStyle, _code, indent, assetPath);
+                    DrawDashListItem(trimmedStart[2..], _body, _linkStyle, _code, indent, assetPath, scriptExecContext);
                     continue;
                 }
                 if (trimmedStart.StartsWith("* ", StringComparison.Ordinal))
                 {
-                    DrawBulletListItem(trimmedStart[2..], _body, _linkStyle, _code, indent, assetPath);
+                    DrawBulletListItem(trimmedStart[2..], _body, _linkStyle, _code, indent, assetPath, scriptExecContext);
                     continue;
                 }
                 if (trimmedStart.StartsWith("```", StringComparison.Ordinal))
@@ -763,7 +819,7 @@ namespace MarkleftEditor
                 }
                 else
                 {
-                    DrawParagraph(trimmedStart, _body, _linkStyle, _code, indent, assetPath);
+                    DrawParagraph(trimmedStart, _body, _linkStyle, _code, indent, assetPath, scriptExecContext);
                 }
             }
         }

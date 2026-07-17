@@ -15,6 +15,7 @@ It is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-like ren
   - [To menu entries](menu:Window/Package Management/Package Manager)
   - [To project settings](project:Project/Quality)
   - [To user preferences](prefs:Preferences/External Tools)
+  - [That trigger scripts](static:ReadmeEditor.ExampleCall)
 * Images
   * ![like this one](TutorialInfo/Icons/URP.png)
 * Code blocks (no syntax highlighting yet)
@@ -25,3 +26,5 @@ It is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-like ren
   ```
 * Horizontal splits
 -----
+
+[Remove the Sample assets](static:ReadmeEditor.RemoveTutorial)
