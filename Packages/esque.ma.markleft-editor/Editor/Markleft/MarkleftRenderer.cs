@@ -62,7 +62,7 @@ namespace MarkleftEditor
         private static Texture2D _codeBackground = null;
         private static bool _stylesInitialized = false;
 
-        private const float BulletIndent = 16f;  
+        private const float BulletIndent = 12f;  
         
         private static void InitStyles()
         {
@@ -485,6 +485,21 @@ namespace MarkleftEditor
             return tokens;
         }
 
+        private enum LinePrefixType
+        {
+            None,
+            Circle,
+            Dash,
+            TaskUnchecked,
+            TaskChecked,
+        }
+
+        private struct LinePrefix
+        {
+            public LinePrefixType PrefixType;
+            public RangeInt TextRange;
+        }
+
         /// <summary>
         /// Tokenizes and draws a markleft section, wrapping long lines along spaces.
         /// </summary>
@@ -493,17 +508,17 @@ namespace MarkleftEditor
         /// <param name="linkStyle">link version of the style to apply</param>
         /// <param name="indent">indentation to apply to this section</param>
         /// <param name="assetPath">path of the current asset to resolve relative paths against</param>
-        /// <param name="bulletGlyph">glyph to prepend if in a bullet list</param>
+        /// <param name="prefix">glyph to prepend if in a bullet list</param>
         /// <param name="scriptExecContext">static script execution context: usually any C# object instance in the Editor space</param>
         private static void DrawWrappedInline(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object scriptExecContext,
-            string bulletGlyph = null)
+            LinePrefix prefix)
         {
             var tokens = Tokenize(content, MakeStyleVariants(baseStyle), MakeStyleVariants(linkStyle), MakeStyleVariants(codeStyle), TokenType.Body, assetPath);
             if (tokens.Count == 0) return;
 
             const float spacing = 3f;
             const float bulletWidth = 12f;
-            var reserved = indent + (bulletGlyph != null ? bulletWidth + spacing : 0f);
+            var reserved = indent + (prefix.PrefixType != LinePrefixType.None ? bulletWidth + spacing : 0f);
             var availableWidth = Math.Max(60f, EditorGUIUtility.currentViewWidth - 40f - reserved);
 
             var lineOpen = false;
@@ -514,7 +529,23 @@ namespace MarkleftEditor
             {
                 EditorGUILayout.BeginHorizontal();
                 if (indent > 0f) GUILayout.Space(indent);
-                if (bulletGlyph != null) GUILayout.Label(firstLine? bulletGlyph : string.Empty, baseStyle, GUILayout.Width(bulletWidth));
+                switch (prefix.PrefixType)
+                {
+                    case LinePrefixType.Circle or LinePrefixType.Dash:
+                        GUILayout.Label(firstLine? prefix.PrefixType switch
+                        {
+                            LinePrefixType.Circle => "\u2022",
+                            LinePrefixType.Dash => "-",
+                            _ => string.Empty
+                        } : string.Empty, baseStyle, GUILayout.Width(bulletWidth));
+                        break;
+                    case LinePrefixType.TaskChecked or LinePrefixType.TaskUnchecked:
+                        if (firstLine)
+                            GUILayout.Toggle(prefix.PrefixType == LinePrefixType.TaskChecked, string.Empty, GUILayout.Width(bulletWidth + spacing));
+                        else
+                            GUILayout.Label(string.Empty, baseStyle, GUILayout.Width(bulletWidth + spacing));
+                        break;
+                }
                 lineOpen = true;
                 lineWidth = 0f;
                 firstLine = false;
@@ -705,15 +736,27 @@ namespace MarkleftEditor
                 EndLine();
             }
         }
+        
+        private static void DrawTaskListItem(string content, bool taskFlag, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object context) => 
+            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, context, new LinePrefix()
+            {
+                PrefixType = taskFlag ? LinePrefixType.TaskChecked : LinePrefixType.TaskUnchecked
+            });
 
         private static void DrawDashListItem(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object context) => 
-            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, context, "-");
+            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, context, new LinePrefix()
+            {
+                PrefixType = LinePrefixType.Dash,
+            });
 
         private static void DrawBulletListItem(string content, GUIStyle baseStyle, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object context) => 
-            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, context, "\u2022");
+            DrawWrappedInline(content, baseStyle, linkStyle, codeStyle, indent + BulletIndent, assetPath, context, new LinePrefix()
+            {
+                PrefixType = LinePrefixType.Circle
+            });
 
         private static void DrawParagraph(string content, GUIStyle style, GUIStyle linkStyle, GUIStyle codeStyle, float indent, string assetPath, UnityEngine.Object context) => 
-            DrawWrappedInline(content, style, linkStyle, codeStyle, indent, assetPath, context);
+            DrawWrappedInline(content, style, linkStyle, codeStyle, indent, assetPath, context, new LinePrefix());
 
         /// <summary>
         /// Draws the Markleft string, using <paramref name="assetPath"/> as the base address for asset references, and
@@ -779,6 +822,16 @@ namespace MarkleftEditor
 
                 string trimmedStart = line.TrimStart();
                 float indent = (line.Length == trimmedStart.Length) ? 0f : BulletIndent * (line.Length - trimmedStart.Length + 2) * 0.5f;
+                if (trimmedStart.StartsWith("- [ ] ", StringComparison.Ordinal))
+                {
+                    DrawTaskListItem(trimmedStart[5..], false, _body, _linkStyle, _code, indent, assetPath, scriptExecContext);
+                    continue;
+                }
+                if (trimmedStart.StartsWith("- [X] ", StringComparison.Ordinal) || trimmedStart.StartsWith("- [x] ", StringComparison.Ordinal))
+                {
+                    DrawTaskListItem(trimmedStart[5..], true, _body, _linkStyle, _code, indent, assetPath, scriptExecContext);
+                    continue;
+                }
                 if (trimmedStart.StartsWith("- ", StringComparison.Ordinal))
                 {
                     DrawDashListItem(trimmedStart[2..], _body, _linkStyle, _code, indent, assetPath, scriptExecContext);

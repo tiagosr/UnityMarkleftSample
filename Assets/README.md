@@ -1,6 +1,6 @@
 # This is a Markleft document
 
-It is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-like renderer with some useful features for use within the Unity Editor
+It is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-like renderer with some useful features for use within the Unity Editor 😉
 
 ## Feature list
 
@@ -8,6 +8,9 @@ It is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-like ren
 * Bullet-point lists
   * Starting with `*`
   - Starting with `-`
+* Task lists (non-interactive at the moment)
+  - [ ] unchecked
+  - [X] checked!
 * Links
   - [To external websites (using your browser)](https://unity.com/)
   - [To assets relative to the current asset location](TutorialInfo/Icons/URP.png)

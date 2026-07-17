@@ -8,6 +8,9 @@ Markleft is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-li
 * Bullet-point lists
   * Starting with `*`
   - Starting with `-`
+* Task lists (non-interactive at the moment)
+  - [ ] unchecked
+  - [X] checked!
 * Links
   - To external websites (using your browser): `[External link](https://unity.com/)`
   - To assets relative to the current asset location: `[Relative asset path](TutorialInfo/Icons/URP.png)`
