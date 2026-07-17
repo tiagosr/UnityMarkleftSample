@@ -13,6 +13,6 @@ MonoBehaviour:
   m_Name: Readme
   m_EditorClassIdentifier: 
   sourceFile: {fileID: 4900000, guid: 0a5be229fec72c34f8917b7d756b0edd, type: 3}
-  title: URP Empty Template
+  title: Markleft Renderer README Sample
   icon: {fileID: 2800000, guid: 727a75301c3d24613a3ebcec4a24c2c8, type: 3}
   loadedLayout: 1
