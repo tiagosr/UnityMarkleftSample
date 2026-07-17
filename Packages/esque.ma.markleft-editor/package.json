@@ -1,0 +1,16 @@
+{
+    "name": "esque.ma.markleft-editor",
+    "version": "0.9.0",
+    "displayName": "Markleft Renderer for Editor Scripts",
+    "description": "Markdown-lite renderer for Unity Editor inspectors/views/windows",
+    "unity": "6000.0",
+    "author": {
+        "name": "Tiago Rezende",
+        "email": "tiago.rezende@unity3d.com",
+        "url": "https://esque.ma/"
+    },
+    "keywords": [
+        "richtext", "markdown", "md", "markleft", "documentation",
+        "custom views", "custom inspector"
+    ]
+}
