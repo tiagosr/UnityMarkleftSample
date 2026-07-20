@@ -669,7 +669,7 @@ namespace MarkleftEditor
                 lineOpen = false;
             }
 
-            Vector2 CalcSizeForToken(InlineToken token, out Texture2D textureIfLoaded)
+            Vector2 CalcSizeForToken(InlineToken token, out Texture2D textureIfLoaded, float maxWidth)
             {
                 if (token.Style is null)
                 {
@@ -687,8 +687,8 @@ namespace MarkleftEditor
                     if (textureIfLoaded is not null)
                     {
                         float aspect = textureIfLoaded.height > 0 ? (float)textureIfLoaded.width / textureIfLoaded.height : 1f;
-                        float maxWidth = EditorGUIUtility.currentViewWidth - 40f;
-                        float height = Mathf.Min(200f, maxWidth / aspect);
+                        //float maxWidth = EditorGUIUtility.currentViewWidth - 40f;
+                        float height = Mathf.Min(textureIfLoaded.height, maxWidth / aspect);
                         float width = height * aspect;
                         return new Vector2(width, height);
                     }
@@ -718,7 +718,7 @@ namespace MarkleftEditor
                         if (textureIfLoaded is not null)
                         {
                             var gc = new GUIContent(textureIfLoaded, token.Text);
-                            if (GUILayout.Button(gc, GUILayout.Width(size.x), GUILayout.Height(size.y), GUILayout.ExpandWidth(false)))
+                            if (GUILayout.Button(gc, linkStyle, GUILayout.Width(size.x), GUILayout.Height(size.y), GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(true)))
                             {
                                 OpenLink(token.LinkUrl, scriptExecContext);
                             }
@@ -747,7 +747,7 @@ namespace MarkleftEditor
                             {
                                 text = null 
                             };
-                            GUILayout.Box(gc, GUILayout.Width(size.x), GUILayout.Height(size.y), GUILayout.ExpandWidth(false));
+                            GUILayout.Box(gc, GUILayout.Width(size.x), GUILayout.Height(size.y), GUILayout.ExpandWidth(false), GUILayout.ExpandHeight(true));
                         }
                         else
                         {
@@ -769,7 +769,7 @@ namespace MarkleftEditor
             bool FlushPendingToken(bool closeLine = false)
             {
                 if (lastToken.Style is null) return false;
-                var size = CalcSizeForToken(lastToken, out var loaded);
+                var size = CalcSizeForToken(lastToken, out var loaded, availableWidth);
                 if (lineWidth + size.x > availableWidth + 10)
                 {
                     // not enough space in the current line, let's close this one and open a new line
@@ -809,7 +809,7 @@ namespace MarkleftEditor
                         {
                             Text = $"{lastToken.Text} {token.Text}",
                         };
-                        var size = CalcSizeForToken(attempt, out _);
+                        var size = CalcSizeForToken(attempt, out _, availableWidth);
                         if (lineWidth + size.x > availableWidth)
                         {
                             // not enough space in the current line, let's flush the last token,

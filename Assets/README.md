@@ -21,6 +21,7 @@ It is a [Markdown](https://daringfireball.net/projects/markdown/syntax)-like ren
   - [That trigger scripts](static:ReadmeEditor.ExampleCall)
 * Images
   * ![like this one](TutorialInfo/Icons/URP.png)
+  * [also inside links![link icon](TutorialInfo/Icons/icons8-link-32.png)](https://icons8.com/icons/set/link)
 * Code blocks (no syntax highlighting yet)
   ```
   void Hello(string world) {
