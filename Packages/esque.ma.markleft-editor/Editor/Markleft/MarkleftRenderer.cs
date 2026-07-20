@@ -47,9 +47,7 @@ namespace MarkleftEditor
         private static readonly Regex SeparatorRegex = new Regex(@"---(-*)\s*$", RegexOptions.Compiled);
 
         private static readonly Regex InlineTokenRegex = new Regex(
-            @"(?<image>!\[(?<imagealt>.*?)\]\((?<imagepath>.*?)\))"+
-            @"|(?<code>`(?<codetext>.*?)`)"+
-            @"|(?<link>\[(?<linklabel>.*?)\]\((?<linkurl>.*?)\))"+
+            @"(?<code>`(?<codetext>.*?)`)"+
             @"|(?<bold>\*\*(?<boldtext>.+?)\*\*)"+
             @"|(?<italic>(?<!\*)\*(?<italictext>[^*\n]+?)\*)"+
             @"|(?<italic2>_(?<italictext2>.+?)_)",
@@ -426,12 +424,95 @@ namespace MarkleftEditor
             return string.Join("/", dirSegments);
         }
 
+        private static bool TryParseBracketToken(string content, int start, out bool isImage, out string label,
+            out string url, out int length)
+        {
+            isImage = false;
+            label = null;
+            url = null;
+            length = 0;
+
+            var i = start;
+            if (i < content.Length && content[i] == '!')
+            {
+                isImage = true;
+                i++;
+            }
+            if (i >= content.Length || content[i] != '[') return false;
+
+            var labelStart = i + 1;
+            var depth = 1;
+            i++; // skip past '['
+            while (i < content.Length && depth > 0)
+            {
+                if (content[i] == '[') depth++;
+                else if (content[i] == ']') depth--;
+                if (depth>0) i++;
+            }
+            // no matching ']' found on this line
+            if (depth != 0) return false;
+
+            var labelEnd = i;
+            i++; // skip past ']'
+            
+            // not a correctly-formed []() or ![]() token
+            if (i >= content.Length || content[i] != '(') return false;
+            var urlStart = i + 1;
+            depth = 1;
+            i++; // skip past '('
+            while (i < content.Length && depth > 0)
+            {
+                if (content[i] == '(') depth++;
+                else if (content[i] == ')') depth--;
+                if (depth > 0) i++;
+            }
+            if (depth != 0) return false; // no matching ')' found on this line
+            var urlEnd = i;
+            i++;  // skip past ')'
+            
+            label = content.Substring(labelStart, labelEnd - labelStart);
+            url = content.Substring(urlStart, urlEnd - urlStart);
+            length = i - start;
+            return true;
+        }
+
+        /// <summary>
+        /// Scan the string for possible images or links, and if any candidate is found, try a full parse
+        /// </summary>
+        /// <param name="content">the input string to parse</param>
+        /// <param name="start">the starting point to try parsing from</param>
+        /// <param name="foundAt">the output location if found</param>
+        /// <param name="isImage">true if we found an image here</param>
+        /// <param name="label">the label side of the tag</param>
+        /// <param name="url">the url side of the tag</param>
+        /// <param name="length">the length of the parsed tag</param>
+        /// <returns>true if either an image or link is found, false otherwise</returns>
+        private static bool FindNextBracketToken(string content, int start, out int foundAt, out bool isImage,
+            out string label, out string url, out int length)
+        {
+            for (int i = start; i < content.Length; i++)
+            {
+                if (content[i] != '!' && content[i] != '[') continue;
+                if (!TryParseBracketToken(content, i, out isImage, out label, out url, out length)) continue;
+                foundAt = i;
+                return true;
+            }
+            foundAt = -1;
+            isImage = false;
+            label = null;
+            url = null;
+            length = 0;
+            return false;
+        }
+
         /// <summary>
         /// Splits each paragraph into word or image chunks, and attaches the style 
         /// </summary>
         /// <param name="content">string to tokenize</param>
         /// <param name="style">default style to apply</param>
         /// <param name="linkStyle">style to apply when drawing links</param>
+        /// <param name="codeStyle">style to apply when drawing code</param>
+        /// <param name="baseType">base token type (normal text, link, code)</param>
         /// <param name="assetPath">the readme asset's location to resolve asset links against</param>
         /// <returns>list of tokens parsed from the paragraph</returns>
         private static List<InlineToken> Tokenize(string content, StyleVariants style, StyleVariants linkStyle, StyleVariants codeStyle, TokenType baseType, string assetPath)
@@ -448,32 +529,62 @@ namespace MarkleftEditor
             {
                 tokens.Add(new InlineToken { Type = type, Text = alt, ImageUrl = NormalizeLink(imagePath, assetPath), Style = style, LinkUrl = url });
             }
+
+            InlineToken ApplyLinkUrl(InlineToken token, string url)
+            {
+                token.LinkUrl = url;
+                return token;
+            }
             
-            var matches = InlineTokenRegex.Matches(content);
             int cursor = 0;
 
-            foreach (Match m in matches)
+            while (cursor < content.Length)
             {
-                if (m.Index > cursor)
-                    AddWords(content.Substring(cursor, m.Index - cursor), style.BaseStyle, baseType);
-                if (m.Groups["image"].Success)
-                    AddImage(m.Groups["imagealt"].Value, m.Groups["imagepath"].Value, style.BaseStyle, baseType);
-                else if (m.Groups["link"].Success)
-                    AddWords(m.Groups["linklabel"].Value, linkStyle.BaseStyle, baseType | TokenType.Link, NormalizeLink(m.Groups["linkurl"].Value, assetPath));
-                else if (m.Groups["code"].Success)
-                    tokens.AddRange(TokenizeCode(m.Groups["codetext"].Value, MakeStyleVariants(codeStyle.BaseStyle), MakeStyleVariants(codeStyle.BaseStyle), assetPath));
-                else if (m.Groups["bold"].Success)
-                    tokens.AddRange(Tokenize(m.Groups["boldtext"].Value, MakeStyleVariants(style.BoldStyle), MakeStyleVariants(linkStyle.BoldStyle), codeStyle, baseType | TokenType.Bold, assetPath));
-                else if (m.Groups["italic"].Success)
-                    tokens.AddRange(Tokenize(m.Groups["italictext"].Value, MakeStyleVariants(style.ItalicStyle), MakeStyleVariants(linkStyle.ItalicStyle), codeStyle, baseType | TokenType.Italic, assetPath));
-                else if (m.Groups["italic2"].Success)
-                    tokens.AddRange(Tokenize(m.Groups["italictext2"].Value, MakeStyleVariants(style.ItalicStyle), MakeStyleVariants(linkStyle.ItalicStyle), codeStyle, baseType | TokenType.Italic, assetPath));
-                
-                cursor = m.Index + m.Length;
+                var regexMatch = InlineTokenRegex.Match(content, cursor);
+                var regexMatchSuccess = regexMatch.Length > 0;
+                var hasBracket = FindNextBracketToken(content, cursor, out var bracketAt, out var isImage,
+                    out var label, out var url, out var bracketLength);
+
+                var parseBracket = hasBracket && (!regexMatchSuccess || bracketAt <= regexMatch.Index);
+
+                if (parseBracket)
+                {
+                    if (bracketAt > cursor)
+                        AddWords(content.Substring(cursor, bracketAt - cursor), style.BaseStyle, baseType);
+                    if (isImage)
+                    {
+                        AddImage(label, url, style.BaseStyle, baseType);
+                    }
+                    else
+                    {
+                        url = NormalizeLink(url, assetPath);
+                        tokens.AddRange(
+                            Tokenize(label, linkStyle, linkStyle, codeStyle, baseType | TokenType.Link, assetPath)
+                                .Select((token) => ApplyLinkUrl(token, url)));
+                    }
+                    cursor = bracketAt + bracketLength;
+                } 
+                else if (regexMatchSuccess)
+                {
+                    if (regexMatch.Index > cursor)
+                        AddWords(content.Substring(cursor, regexMatch.Index - cursor), style.BaseStyle, baseType);
+                    if (regexMatch.Groups["code"].Success)
+                        tokens.AddRange(TokenizeCode(regexMatch.Groups["codetext"].Value, MakeStyleVariants(codeStyle.BaseStyle), MakeStyleVariants(codeStyle.BaseStyle), assetPath));
+                    else if (regexMatch.Groups["bold"].Success)
+                        tokens.AddRange(Tokenize(regexMatch.Groups["boldtext"].Value, MakeStyleVariants(style.BoldStyle), MakeStyleVariants(linkStyle.BoldStyle), codeStyle, baseType | TokenType.Bold, assetPath));
+                    else if (regexMatch.Groups["italic"].Success)
+                        tokens.AddRange(Tokenize(regexMatch.Groups["italictext"].Value, MakeStyleVariants(style.ItalicStyle), MakeStyleVariants(linkStyle.ItalicStyle), codeStyle, baseType | TokenType.Italic, assetPath));
+                    else if (regexMatch.Groups["italic2"].Success)
+                        tokens.AddRange(Tokenize(regexMatch.Groups["italictext2"].Value, MakeStyleVariants(style.ItalicStyle), MakeStyleVariants(linkStyle.ItalicStyle), codeStyle, baseType | TokenType.Italic, assetPath));
+                    cursor = regexMatch.Index + regexMatch.Length;
+                }
+                else
+                {
+                    AddWords(content.Substring(cursor), style.BaseStyle, baseType);
+                    break;
+                }
             }
-            if (cursor < content.Length)
-                AddWords(content.Substring(cursor, content.Length - cursor), style.BaseStyle, baseType);
-            
+
             return tokens;
         }
 
